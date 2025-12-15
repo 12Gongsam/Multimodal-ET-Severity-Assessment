@@ -1,5 +1,5 @@
 # Multimodal-ET-Severity-Assessment
-This project includes data augmentation, model definition, training, inference, and analysis used in “Multimodal fusion network for essential tremor severity assessment using accelerometer and trajectory signals”
+This project includes data augmentation, model definition, training, inference, and analysis used in “Multimodal sensor fusion network for essential tremor severity assessment using accelerometer and motion trajectory signals”
 
 ## Main.ipynb
 - Model : LSTM, ResNet18, TimesNet, WaveNet-style, MIL_Multimodal, MIL_Single
