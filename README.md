@@ -13,4 +13,4 @@ This project includes data augmentation, model definition, training, inference, 
 
 ## Model structure
 
-![Result figure](figures/model.png)
+![Model figure](figure/model.png)
