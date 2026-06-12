@@ -340,6 +340,11 @@ def _fit(
         score = valid_metrics[config.monitor]
         if scheduler is not None:
             scheduler.step(score)
+        improved = (
+            score < best_score
+            if config.monitor == "loss"
+            else score > best_score
+        )
 
         for prefix, metrics in (
             ("train", train_metrics),
@@ -362,13 +367,9 @@ def _fit(
             f"VA acc/F1 {valid_metrics['acc']:.3f}/"
             f"{valid_metrics['macro_f1']:.3f} | "
             f"lr {history['lr'][-1]:.2e}"
+            f"{' | BEST' if improved else ''}"
         )
 
-        improved = (
-            score < best_score
-            if config.monitor == "loss"
-            else score > best_score
-        )
         if improved:
             best_score = score
             best_state = {
