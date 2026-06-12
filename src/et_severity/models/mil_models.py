@@ -45,6 +45,7 @@ class MultimodalModelConfig:
     time_dropout: float = 0.1
     mil_attn_dim: int = 64
     time_pool: str = "attn"
+    cross_attention_direction: str = "traj_query"
     seq_len: int = SEG_LEN
 
 
@@ -122,12 +123,17 @@ class MIL_MultiModal(nn.Module):
         time_dropout: float = 0.1,
         mil_attn_dim: int = 64,
         time_pool: str = "attn",
+        cross_attention_direction: str = "traj_query",
     ):
         super().__init__()
         if d_model % cross_attention_heads != 0:
             raise ValueError("d_model must be divisible by cross_attention_heads")
         if time_pool not in {"attn", "gap"}:
             raise ValueError("time_pool must be 'attn' or 'gap'")
+        if cross_attention_direction not in {"traj_query", "acc_query"}:
+            raise ValueError(
+                "cross_attention_direction must be 'traj_query' or 'acc_query'"
+            )
 
         self.acc_encoder = acc_encoder
         self.traj_encoder = traj_encoder
@@ -142,6 +148,7 @@ class MIL_MultiModal(nn.Module):
             batch_first=True,
         )
         self.time_pool = time_pool
+        self.cross_attention_direction = cross_attention_direction
         self.time_readout = (
             AttnTimeReadout(d_model, dropout=time_dropout)
             if time_pool == "attn"
@@ -178,10 +185,17 @@ class MIL_MultiModal(nn.Module):
         traj_features = self.traj_norm(
             self.traj_projection(self.traj_encoder.encode(traj))
         )
+        if self.cross_attention_direction == "traj_query":
+            query_features = traj_features
+            context_features = acc_features
+        else:
+            query_features = acc_features
+            context_features = traj_features
+
         fused, cross_attention_weights = self.cross_attention(
-            traj_features,
-            acc_features,
-            acc_features,
+            query_features,
+            context_features,
+            context_features,
         )
 
         if self.time_pool == "attn":
@@ -204,6 +218,7 @@ class MIL_MultiModal(nn.Module):
                 else time_weights.view(batch_size, instances, encoded_steps)
             ),
             "cross_attention_weights": cross_attention_weights,
+            "cross_attention_direction": self.cross_attention_direction,
         }
 
 
@@ -366,4 +381,5 @@ def build_multimodal_model(config: MultimodalModelConfig) -> MIL_MultiModal:
         time_dropout=config.time_dropout,
         mil_attn_dim=config.mil_attn_dim,
         time_pool=config.time_pool,
+        cross_attention_direction=config.cross_attention_direction,
     )
