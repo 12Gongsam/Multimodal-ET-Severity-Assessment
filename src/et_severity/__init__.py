@@ -4,7 +4,12 @@ from importlib import import_module
 
 from .config import DEFAULT_DEVICE, HOP, NUM_WORKERS, SEED, SEG_LEN
 from .data import build_LOSO_loaders, build_manifest
-from .models import EncoderConfig, MultimodalModelConfig, SingleModelConfig
+from .models import (
+    EncoderConfig,
+    JointInstanceAttentionConfig,
+    MultimodalModelConfig,
+    SingleModelConfig,
+)
 from .training import (
     TrainingConfig,
     TrainingRun,
@@ -62,6 +67,7 @@ __all__ = [
     "EncoderConfig",
     "SingleModelConfig",
     "MultimodalModelConfig",
+    "JointInstanceAttentionConfig",
     "TrainingConfig",
     "TrainingRun",
     "fit_single_modality",

@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
+from ..models.joint_instance_attention_mil import JointInstanceAttentionConfig
 from ..models.mil_models import MultimodalModelConfig, SingleModelConfig
 from .engine import TrainingConfig
 from .experiments import fit_multimodal, fit_single_modality
@@ -52,9 +53,13 @@ def run_loso_cv(
     if modality == "multimodal" and target != "severity":
         raise ValueError("multimodal training currently supports severity only")
     if modality == "multimodal" and not isinstance(
-        model_config, MultimodalModelConfig
+        model_config,
+        (MultimodalModelConfig, JointInstanceAttentionConfig),
     ):
-        raise TypeError("multimodal training requires MultimodalModelConfig")
+        raise TypeError(
+            "multimodal training requires MultimodalModelConfig or "
+            "JointInstanceAttentionConfig"
+        )
     if modality != "multimodal" and not isinstance(
         model_config, SingleModelConfig
     ):
@@ -108,8 +113,13 @@ def run_loso_cv(
 
         if output_dir is not None:
             if modality == "multimodal":
+                architecture = (
+                    "JointInstanceAttention_"
+                    if isinstance(model_config, JointInstanceAttentionConfig)
+                    else ""
+                )
                 checkpoint_name = (
-                    f"ACC_{model_config.acc_encoder.name}_"
+                    f"{architecture}ACC_{model_config.acc_encoder.name}_"
                     f"Traj_{model_config.traj_encoder.name}_"
                     f"{target}_val_pid{patient_id}.pth"
                 )

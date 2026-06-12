@@ -9,6 +9,10 @@ import torch
 import torch.nn as nn
 
 from ..config import DEFAULT_DEVICE
+from ..models.joint_instance_attention_mil import (
+    JointInstanceAttentionConfig,
+    build_joint_instance_attention_model,
+)
 from ..models.mil_models import (
     MultimodalModelConfig,
     SingleModelConfig,
@@ -26,6 +30,7 @@ from .engine import (
 
 MetricFn = Callable[[Dict[str, object]], object]
 DeviceLike = Union[str, torch.device]
+MultimodalConfig = Union[MultimodalModelConfig, JointInstanceAttentionConfig]
 
 
 @dataclass
@@ -33,7 +38,7 @@ class TrainingRun:
     model: nn.Module
     history: Dict[str, List[object]]
     metrics: Dict[str, object]
-    model_config: Union[SingleModelConfig, MultimodalModelConfig]
+    model_config: Union[SingleModelConfig, MultimodalConfig]
     training_config: TrainingConfig
 
 
@@ -95,7 +100,7 @@ def fit_multimodal(
     train_loader,
     valid_loader,
     *,
-    model_config: MultimodalModelConfig,
+    model_config: MultimodalConfig,
     training_config: TrainingConfig = TrainingConfig(),
     device: Optional[DeviceLike] = None,
     class_weights: Optional[torch.Tensor] = None,
@@ -105,7 +110,16 @@ def fit_multimodal(
     """Build, train, and evaluate one multimodal severity model."""
     resolved_device = _resolve_device(device)
     set_seed(seed)
-    model = build_multimodal_model(model_config).to(resolved_device)
+    if isinstance(model_config, JointInstanceAttentionConfig):
+        model = build_joint_instance_attention_model(model_config)
+    elif isinstance(model_config, MultimodalModelConfig):
+        model = build_multimodal_model(model_config)
+    else:
+        raise TypeError(
+            "model_config must be MultimodalModelConfig or "
+            "JointInstanceAttentionConfig"
+        )
+    model = model.to(resolved_device)
     history = train_multimodal_model(
         model,
         train_loader,

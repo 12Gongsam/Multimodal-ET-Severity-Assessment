@@ -161,6 +161,57 @@ multimodal_result = run_loso_cv(
 )
 ```
 
+### Experimental Joint Instance Attention
+
+This model pools each encoder over time, applies joint self-attention to the
+`[ACC_1, ..., ACC_N, TRAJ_1, ..., TRAJ_N]` tokens, and then uses trajectory
+tokens as cross-attention queries over ACC tokens.
+
+```python
+from et_severity import JointInstanceAttentionConfig
+
+joint_config = JointInstanceAttentionConfig(
+    acc_encoder=EncoderConfig(
+        "LSTM",
+        {"hidden_size": 128, "num_layers": 2, "dropout": 0.1},
+    ),
+    traj_encoder=EncoderConfig(
+        "ResNet18",
+        {"feature_dim": 128},
+    ),
+    num_classes=4,
+    d_model=128,
+    attention_heads=8,
+    joint_attention_layers=2,  # 2 or 3
+    feedforward_dim=512,
+    attention_dropout=0.1,
+    time_dropout=0.1,
+    mil_attn_dim=64,
+    seq_len=512,
+)
+
+joint_result = run_loso_cv(
+    multimodal_loaders,
+    modality="multimodal",
+    model_config=joint_config,
+    training_config=training_config,
+    seed=SEED,
+    expected_folds=9,
+    checkpoint_dir=REPO_ROOT / "checkpoints" / "joint_instance_attention",
+)
+
+display(joint_result["fold_results"])
+display(joint_result["fold_summary"])
+```
+
+For an existing Colab checkout, pull the updated repository and restart the
+runtime before importing `et_severity` again:
+
+```python
+%cd /content/Multimodal-ET-Severity-Assessment
+!git pull
+```
+
 ## Metrics
 
 `run_loso_cv()` calculates the same patient-level metrics as the legacy
