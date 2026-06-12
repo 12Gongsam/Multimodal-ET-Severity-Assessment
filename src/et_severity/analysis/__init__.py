@@ -1,6 +1,7 @@
 from .metrics import (
     compare_ordinal_ratings,
     compute_patient_level_metrics,
+    evaluation_to_prediction_frame,
     median_absolute_deviation,
     summarize_metric_columns,
 )
@@ -21,6 +22,7 @@ mad = median_absolute_deviation
 __all__ = [
     "DEFAULT_MODEL_NAMES",
     "compute_patient_level_metrics",
+    "evaluation_to_prediction_frame",
     "summarize_metric_columns",
     "compare_ordinal_ratings",
     "median_absolute_deviation",

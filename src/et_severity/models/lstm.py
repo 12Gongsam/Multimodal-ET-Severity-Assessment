@@ -1,6 +1,6 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""LSTM sequence encoder."""
 
-from ..common_imports import *
+import torch.nn as nn
 
 class LSTM(nn.Module):
     def __init__(self, in_c, hidden_size, num_layers, dropout=0.1):

@@ -11,8 +11,6 @@ FS = 100.0
 SEG_LEN = 512
 HOP = 512
 
-DEFAULT_D_MODEL = 128
-DEFAULT_MIL_ATTN_DIM = 64
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_TARGET_PER_CLASS = 200
 DEFAULT_USECOLS = ["accel_x", "accel_y", "accel_z", "coor_x", "coor_y"]

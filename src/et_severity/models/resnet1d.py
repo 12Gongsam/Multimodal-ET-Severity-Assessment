@@ -1,6 +1,9 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""One-dimensional ResNet encoder."""
 
-from ..common_imports import *
+import math
+
+import torch
+import torch.nn as nn
 
 class BasicBlock1D(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):

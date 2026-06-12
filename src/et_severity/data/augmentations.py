@@ -1,6 +1,10 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""Sensor augmentations used by MIL datasets."""
 
-from ..common_imports import *
+import math
+from typing import Optional
+
+import numpy as np
+import torch
 
 def _rand_unit_vec3(rng):
     v = rng.standard_normal(3)
@@ -32,23 +36,26 @@ class BagRotator:
         self.rng = np.random.default_rng(seed)
         self.prob = float(prob)
 
-    def __call__(self, acc_bag: torch.Tensor, traj_bag: torch.Tensor):
-        # 코인플립: 회전 적용 여부
+    def __call__(
+        self,
+        acc_bag: Optional[torch.Tensor] = None,
+        traj_bag: Optional[torch.Tensor] = None,
+    ):
+        if acc_bag is None and traj_bag is None:
+            raise ValueError("At least one modality must be provided.")
+
         if self.rng.random() < self.prob:
-            # ACC 3D 임의 회전
-            axis = _rand_unit_vec3(self.rng)
-            theta3 = self.rng.uniform(-math.pi, math.pi)
-            R3 = torch.from_numpy(_rot_R3_axis_angle(axis, theta3)).to(acc_bag)
+            if acc_bag is not None:
+                axis = _rand_unit_vec3(self.rng)
+                theta3 = self.rng.uniform(-math.pi, math.pi)
+                R3 = torch.from_numpy(_rot_R3_axis_angle(axis, theta3)).to(acc_bag)
+                acc_bag = torch.einsum("ij,njt->nit", R3, acc_bag)
 
-            # TRAJ 2D 임의 회전
-            theta2 = self.rng.uniform(-math.pi, math.pi)
-            R2 = torch.from_numpy(_rot_R2(theta2)).to(traj_bag)
+            if traj_bag is not None:
+                theta2 = self.rng.uniform(-math.pi, math.pi)
+                R2 = torch.from_numpy(_rot_R2(theta2)).to(traj_bag)
+                traj_bag = torch.einsum("ij,njt->nit", R2, traj_bag)
 
-            if acc_bag.numel():
-                acc_bag = torch.einsum("ij,njt->nit", R3, acc_bag)  # [N,3,T]
-            if traj_bag.numel():
-                traj_bag = torch.einsum("ij,njt->nit", R2, traj_bag) # [N,2,T]
-        # else: 그대로 반환
         return acc_bag, traj_bag
 
 def _permute_chunks(x: np.ndarray, N: int, rng: np.random.Generator) -> np.ndarray:
@@ -107,9 +114,18 @@ class InstancePermTimeW:
         self.prob_perm = float(prob_perm)
         self.prob_timew = float(prob_timew)
 
-    def __call__(self, acc_3xt: np.ndarray, traj_2xt: np.ndarray):
-        a = acc_3xt.copy(); t = traj_2xt.copy()
-        C1, T = a.shape
+    def __call__(
+        self,
+        acc_3xt: Optional[np.ndarray] = None,
+        traj_2xt: Optional[np.ndarray] = None,
+    ):
+        if acc_3xt is None and traj_2xt is None:
+            raise ValueError("At least one modality must be provided.")
+
+        a = None if acc_3xt is None else acc_3xt.copy()
+        t = None if traj_2xt is None else traj_2xt.copy()
+        reference = a if a is not None else t
+        T = reference.shape[1]
 
         # 1) Permutation (동일 순서 적용)
         do_perm = self.apply_perm and (self.rng.random() < self.prob_perm)
@@ -121,6 +137,8 @@ class InstancePermTimeW:
                 order = np.arange(N)
                 self.rng.shuffle(order)  # 동일 order를 a,t에 같이 사용
                 def _perm(x):
+                    if x is None:
+                        return None
                     return np.concatenate([x[:, idxs[i]] for i in order], axis=1)
                 a = _perm(a)
                 t = _perm(t)
@@ -129,7 +147,9 @@ class InstancePermTimeW:
         do_timew = self.apply_timew and (self.rng.random() < self.prob_timew)
         if do_timew:
             tau = _timewarp_indices(T, self.rng, a_range=self.tw_a, f_range=self.tw_f)
-            a = _interp1(a, tau)
-            t = _interp1(t, tau)
+            if a is not None:
+                a = _interp1(a, tau)
+            if t is not None:
+                t = _interp1(t, tau)
 
         return a, t

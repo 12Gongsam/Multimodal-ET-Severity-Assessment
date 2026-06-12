@@ -1,6 +1,9 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""Reproducibility helpers."""
 
-from ..common_imports import *
+import random
+
+import numpy as np
+import torch
 
 def set_seed(seed: int = 42):
     random.seed(seed)

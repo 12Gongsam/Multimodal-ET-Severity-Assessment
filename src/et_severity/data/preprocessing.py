@@ -1,6 +1,13 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""Manifest construction and sensor-file preprocessing."""
 
-from ..common_imports import *
+from pathlib import Path
+from typing import Dict, List, Sequence, Tuple
+import re
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
 from ..config import DIR_RE, SPLIT_FILE_RE, TASK2IDX
 
 def split_and_delete_multidirect_fs(
@@ -25,6 +32,8 @@ def split_and_delete_multidirect_fs(
     """
     if suffix_map is None:
         suffix_map = {100: "_1", 200: "_2", 300: "_3"}
+
+    from scipy.ndimage import median_filter
 
     # MultiDirect 디렉토리 하위의 모든 CSV 수집 (대소문자 무시)
     csv_files: List[Path] = [
@@ -272,7 +281,9 @@ def build_segment_manifest(
                 # 컬럼명이 다르더라도 길이만 알면 되므로 전체 길이만 읽기
                 T = len(pd.read_csv(p))
             else:
-                tmp = pd.read_csv(p, usecols=cols)
+                # Row count is modality-independent. Read one column instead of
+                # loading every sensor channel while building the index.
+                tmp = pd.read_csv(p, usecols=[cols[0]])
                 T = len(tmp)
         except Exception:
             continue

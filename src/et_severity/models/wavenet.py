@@ -1,6 +1,8 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""WaveNet-style sequence encoder."""
 
-from ..common_imports import *
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class AttnPoolHead(nn.Module):
     def __init__(self, d_model, num_class, p=0.1):

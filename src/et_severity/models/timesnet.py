@@ -1,6 +1,10 @@
-"""Auto-extracted definitions from notebooks for modular use."""
+"""TimesNet sequence encoder."""
 
-from ..common_imports import *
+import math
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class PositionalEmbedding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -138,7 +142,9 @@ class TimesBlock(nn.Module):
     def forward(self, x):
         B, T, N = x.size()
         # period_list, period_weight = FFT_for_Period(x, k=self.k, f_min=self.f_min)
-        period_list, period_weight = FFT_for_Period(x, k=self.k)
+        period_list, period_weight = FFT_for_Period(
+            x, k=self.k, f_min=self.f_min
+        )
 
         res = []
         for i in range(self.k):

@@ -1,30 +1,31 @@
-"""High-level training workflows used by the import-based notebook."""
+"""Data preparation and LOSO experiment workflows."""
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
 
-from ..config import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_DEVICE,
-    DEFAULT_D_MODEL,
-    DEFAULT_MIL_ATTN_DIM,
-    DEFAULT_TARGET_PER_CLASS,
-)
+from ..config import DEFAULT_BATCH_SIZE, DEFAULT_DEVICE, DEFAULT_TARGET_PER_CLASS
 from ..data.datasets import build_LOSO_loaders
 from ..data.preprocessing import build_manifest, split_and_delete_multidirect_fs
-from ..models.mil_models import MIL_MultiModal, MIL_Single, build_model
+from ..models.mil_models import (
+    MultimodalModelConfig,
+    SingleModelConfig,
+    build_multimodal_model,
+    build_single_modality_model,
+)
 from ..utils.reproducibility import set_seed
 from .engine import (
-    evaluate_on_loader_sev_only,
-    evaluate_on_loader_single,
-    train_model_sev_only,
-    train_model_single,
+    TrainingConfig,
+    evaluate_multimodal_model,
+    evaluate_single_model,
+    train_multimodal_model,
+    train_single_model,
 )
 
 
@@ -36,9 +37,13 @@ def prepare_training_data(
     target_per_class: int = DEFAULT_TARGET_PER_CLASS,
     filter_task: Optional[str] = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    split_multidirect: bool = True,
+    modality: str = "multimodal",
+    patient_ids: Optional[Sequence[int]] = None,
+    num_workers: Optional[int] = None,
+    persistent_workers: Optional[bool] = None,
+    split_multidirect: bool = False,
 ):
-    """Build the manifest and LOSO loaders used by Main.ipynb."""
+    """Build a manifest and modality-specific LOSO loaders."""
     root_dir = Path(root_dir)
     label_csv_path = Path(label_csv_path)
 
@@ -52,93 +57,112 @@ def prepare_training_data(
         target_per_class=target_per_class,
         filter_task=filter_task,
         batch_size=batch_size,
+        modality=modality,
+        patient_ids=patient_ids,
+        num_workers=num_workers,
+        persistent_workers=persistent_workers,
     )
     return manifest, loaders, split_result
 
 
 def summarize_fold_results(results_df: pd.DataFrame) -> Dict[str, float]:
-    """Return mean/std summary statistics for a LOSO result table."""
     if results_df.empty:
-        return {"acc_mean": 0.0, "acc_std": 0.0, "macro_f1_mean": 0.0, "macro_f1_std": 0.0}
+        return {
+            "acc_mean": 0.0,
+            "acc_std": 0.0,
+            "macro_f1_mean": 0.0,
+            "macro_f1_std": 0.0,
+        }
 
-    acc_std = float(results_df["acc"].std(ddof=1)) if len(results_df) > 1 else 0.0
-    f1_std = float(results_df["macro_f1"].std(ddof=1)) if len(results_df) > 1 else 0.0
     return {
         "acc_mean": float(results_df["acc"].mean()),
-        "acc_std": acc_std,
+        "acc_std": (
+            float(results_df["acc"].std(ddof=1))
+            if len(results_df) > 1
+            else 0.0
+        ),
         "macro_f1_mean": float(results_df["macro_f1"].mean()),
-        "macro_f1_std": f1_std,
+        "macro_f1_std": (
+            float(results_df["macro_f1"].std(ddof=1))
+            if len(results_df) > 1
+            else 0.0
+        ),
     }
 
 
-def _save_checkpoint(model: torch.nn.Module, checkpoint_dir, filename: str) -> Optional[Path]:
+def _save_checkpoint(
+    model: torch.nn.Module,
+    checkpoint_dir,
+    filename: str,
+    *,
+    model_config,
+    training_config: TrainingConfig,
+    fold_metrics: Dict[str, object],
+) -> Optional[Path]:
     if checkpoint_dir is None:
         return None
 
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir / filename
-    torch.save(model.state_dict(), checkpoint_path)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "model_config": asdict(model_config),
+            "training_config": asdict(training_config),
+            "fold_metrics": {
+                "acc": float(fold_metrics["acc"]),
+                "macro_f1": float(fold_metrics["macro_f1"]),
+                "per_class_acc": fold_metrics["per_class_acc"],
+            },
+        },
+        checkpoint_path,
+    )
     return checkpoint_path
 
 
 def run_multimodal_severity_loso(
     loaders,
     *,
-    acc_name: str,
-    traj_name: str,
+    model_config: MultimodalModelConfig,
+    training_config: TrainingConfig = TrainingConfig(),
     device: Optional[torch.device] = None,
-    epochs: int = 200,
-    learning_rate: float = 1e-3,
-    patience: int = 20,
-    d_model: int = DEFAULT_D_MODEL,
-    mil_attn_dim: int = DEFAULT_MIL_ATTN_DIM,
-    time_pool: str = "attn",
-    ma_heads: int = 8,
     checkpoint_dir=None,
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, Dict[str, float], Dict[str, Dict[str, list]]]:
-    """Train the multimodal severity model across LOSO folds."""
+    """Train one configurable multimodal severity model across LOSO folds."""
     device = DEFAULT_DEVICE if device is None else device
-
     rows = []
     histories = {}
 
-    for patient_id, (dl_tr, dl_va) in loaders.items():
+    for patient_id, (train_loader, valid_loader) in loaders.items():
         print(f"[Fold PID={patient_id}]")
         set_seed(seed)
-
-        acc_encoder = build_model(model_name=acc_name, in_ch=3, num_classes=4)
-        traj_encoder = build_model(model_name=traj_name, in_ch=2, num_classes=3)
-
-        model = MIL_MultiModal(
-            acc_encoder=acc_encoder,
-            traj_encoder=traj_encoder,
-            d_model=d_model,
-            num_sclass=4,
-            ma_heads=ma_heads,
-            mil_attn_dim=mil_attn_dim,
-            time_pool=time_pool,
-        ).to(device)
-
-        history = train_model_sev_only(
+        model = build_multimodal_model(model_config).to(device)
+        history = train_multimodal_model(
             model,
-            train_loader=dl_tr,
-            valid_loader=dl_va,
+            train_loader,
+            valid_loader,
             device=device,
-            epochs=epochs,
-            learning_rate=learning_rate,
-            early_stopping_patience=patience,
-            weight_decay=1e-4,
-            grad_clip=1.0,
-            sched_factor=0.5,
-            sched_patience=5,
+            config=training_config,
         )
-        metrics = evaluate_on_loader_sev_only(model, dl_va, device)
+        metrics = evaluate_multimodal_model(
+            model,
+            valid_loader,
+            device=device,
+        )
+        filename = (
+            f"ACC_{model_config.acc_encoder.name}_"
+            f"Traj_{model_config.traj_encoder.name}_"
+            f"val_pid{patient_id}.pth"
+        )
         checkpoint_path = _save_checkpoint(
             model,
             checkpoint_dir,
-            f"ACC_{acc_name}_Traj_{traj_name}_val_pid{patient_id}.pth",
+            filename,
+            model_config=model_config,
+            training_config=training_config,
+            fold_metrics=metrics,
         )
 
         print(
@@ -146,13 +170,14 @@ def run_multimodal_severity_loso(
             f"macro-F1={metrics['macro_f1']:.4f} | "
             f"per-class acc={np.round(metrics['per_class_acc'], 3).tolist()}"
         )
-
         rows.append(
             {
                 "patient_id": str(patient_id),
                 "acc": float(metrics["acc"]),
                 "macro_f1": float(metrics["macro_f1"]),
-                "checkpoint_path": None if checkpoint_path is None else str(checkpoint_path),
+                "checkpoint_path": (
+                    None if checkpoint_path is None else str(checkpoint_path)
+                ),
             }
         )
         histories[str(patient_id)] = history
@@ -164,75 +189,58 @@ def run_multimodal_severity_loso(
 def run_single_modality_loso(
     loaders,
     *,
-    model_name: str,
+    model_config: SingleModelConfig,
     modality: str,
     target: str = "severity",
+    training_config: TrainingConfig = TrainingConfig(),
     device: Optional[torch.device] = None,
-    epochs: int = 100,
-    learning_rate: float = 1e-3,
-    patience: int = 20,
-    d_model: int = DEFAULT_D_MODEL,
-    mil_attn_dim: int = DEFAULT_MIL_ATTN_DIM,
     checkpoint_dir=None,
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, Dict[str, float], Dict[str, Dict[str, list]]]:
-    """Train a single-modality MIL model across LOSO folds."""
+    """Train one configurable single-modality model across LOSO folds."""
     if modality not in {"acc", "traj"}:
         raise ValueError("modality must be 'acc' or 'traj'")
     if target not in {"severity", "task"}:
         raise ValueError("target must be 'severity' or 'task'")
 
     device = DEFAULT_DEVICE if device is None else device
-    in_ch = 3 if modality == "acc" else 2
-    num_classes = 4 if target == "severity" else 3
-
     rows = []
     histories = {}
 
-    for patient_id, (dl_tr, dl_va) in loaders.items():
+    for patient_id, (train_loader, valid_loader) in loaders.items():
         print(f"[Fold PID={patient_id}]")
         set_seed(seed)
-
-        base_encoder = build_model(
-            model_name=model_name,
-            in_ch=in_ch,
-            num_classes=num_classes,
-        )
-        model = MIL_Single(
-            base_encoder=base_encoder,
-            num_classes=num_classes,
-            d_model=d_model,
-            time_dropout=0.1,
-            attn_dim=mil_attn_dim,
-            mil_dropout=0.1,
+        model = build_single_modality_model(
+            model_config,
+            modality=modality,
         ).to(device)
-
-        history = train_model_single(
+        history = train_single_model(
             model,
-            train_loader=dl_tr,
-            valid_loader=dl_va,
+            train_loader,
+            valid_loader,
             device=device,
             modality=modality,
             target=target,
-            epochs=epochs,
-            lr=learning_rate,
-            early_stopping_patience=patience,
-            weight_decay=1e-4,
-            grad_clip=1.0,
-            sched_factor=0.5,
-            sched_patience=5,
+            config=training_config,
         )
-        metrics = evaluate_on_loader_single(
+        metrics = evaluate_single_model(
             model,
-            loader=dl_va,
+            valid_loader,
             device=device,
-            target=target,
             modality=modality,
+            target=target,
+        )
+        filename = (
+            f"{model_config.encoder.name}_{modality}_{target}_"
+            f"val_pid{patient_id}.pth"
         )
         checkpoint_path = _save_checkpoint(
             model,
             checkpoint_dir,
-            f"{model_name}_{modality}_{target}_val_pid{patient_id}.pth",
+            filename,
+            model_config=model_config,
+            training_config=training_config,
+            fold_metrics=metrics,
         )
 
         print(
@@ -240,21 +248,17 @@ def run_single_modality_loso(
             f"macro-F1={metrics['macro_f1']:.4f} | "
             f"per-class acc={np.round(metrics['per_class_acc'], 3).tolist()}"
         )
-
         rows.append(
             {
                 "patient_id": str(patient_id),
                 "acc": float(metrics["acc"]),
                 "macro_f1": float(metrics["macro_f1"]),
-                "checkpoint_path": None if checkpoint_path is None else str(checkpoint_path),
+                "checkpoint_path": (
+                    None if checkpoint_path is None else str(checkpoint_path)
+                ),
             }
         )
         histories[str(patient_id)] = history
 
     results_df = pd.DataFrame(rows).sort_values("patient_id").reset_index(drop=True)
     return results_df, summarize_fold_results(results_df), histories
-
-
-prepare_loso_training_data = prepare_training_data
-run_multimodal_loso_severity_experiment = run_multimodal_severity_loso
-run_single_modality_loso_experiment = run_single_modality_loso

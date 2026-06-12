@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 from scipy import stats
 from sklearn.metrics import (
@@ -26,6 +24,45 @@ def _coerce_label_series(series: pd.Series) -> pd.Series:
     if as_numeric.notna().all():
         return as_numeric.astype(int)
     return series.astype(str)
+
+
+def evaluation_to_prediction_frame(
+    evaluation: Mapping[str, object],
+    *,
+    target: str = "severity",
+) -> pd.DataFrame:
+    """Convert an evaluation result into a row-per-bag prediction table."""
+    if target not in {"severity", "task"}:
+        raise ValueError("target must be 'severity' or 'task'")
+
+    required = {"y_true", "y_pred", "probabilities", "meta"}
+    missing = sorted(required - set(evaluation))
+    if missing:
+        raise KeyError(f"Missing evaluation fields: {missing}")
+
+    def to_numpy(value):
+        if hasattr(value, "detach"):
+            value = value.detach().cpu()
+        return np.asarray(value)
+
+    y_true = to_numpy(evaluation["y_true"])
+    y_pred = to_numpy(evaluation["y_pred"])
+    probabilities = to_numpy(evaluation["probabilities"])
+    meta = list(evaluation["meta"])
+    if not (len(y_true) == len(y_pred) == len(probabilities) == len(meta)):
+        raise ValueError("Evaluation outputs and metadata have different lengths.")
+
+    true_col = f"true_{target}"
+    pred_col = f"pred_{target}"
+    rows = []
+    for index, item in enumerate(meta):
+        row = dict(item)
+        row[true_col] = int(y_true[index])
+        row[pred_col] = int(y_pred[index])
+        for class_index, probability in enumerate(probabilities[index]):
+            row[f"prob_{class_index}"] = float(probability)
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def compute_patient_level_metrics(
@@ -109,10 +146,13 @@ def compare_ordinal_ratings(
     true_col: str,
     pred_col: str,
     *,
-    ax: Optional[plt.Axes] = None,
+    ax: Optional[object] = None,
     cmap: str = "Blues",
 ) -> Mapping[str, object]:
     """Compare two ordinal label columns and optionally draw a confusion matrix."""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     clean = df[[true_col, pred_col]].dropna()
     y_true = clean[true_col]
     y_pred = clean[pred_col]
