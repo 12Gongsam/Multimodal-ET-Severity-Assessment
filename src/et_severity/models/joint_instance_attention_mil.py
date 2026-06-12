@@ -23,6 +23,7 @@ class JointInstanceAttentionConfig:
     acc_encoder: EncoderConfig
     traj_encoder: EncoderConfig
     num_classes: int = 4
+    traj_encoder_num_classes: int = 3
     d_model: int = 128
     attention_heads: int = 8
     joint_attention_layers: int = 2
@@ -310,7 +311,7 @@ def build_joint_instance_attention_model(
     traj_encoder, traj_dim = build_encoder(
         config.traj_encoder,
         in_channels=2,
-        num_classes=config.num_classes,
+        num_classes=config.traj_encoder_num_classes,
         seq_len=config.seq_len,
         default_feature_dim=config.d_model,
     )
