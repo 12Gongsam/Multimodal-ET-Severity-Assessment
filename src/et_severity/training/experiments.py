@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from ..config import DEFAULT_DEVICE
-from ..models import (
+from ..models.mil_models import (
     MultimodalModelConfig,
     SingleModelConfig,
     build_multimodal_model,

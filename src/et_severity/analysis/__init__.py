@@ -15,10 +15,6 @@ from .prediction_reports import (
 )
 from .tables import build_session_severity_table, build_session_severity_table_from_csv, save_table_csv
 
-compute_patient_metrics = compute_patient_level_metrics
-analyze_ordinal_agreement = compare_ordinal_ratings
-mad = median_absolute_deviation
-
 __all__ = [
     "DEFAULT_MODEL_NAMES",
     "compute_patient_level_metrics",
@@ -34,7 +30,4 @@ __all__ = [
     "build_session_severity_table",
     "build_session_severity_table_from_csv",
     "save_table_csv",
-    "compute_patient_metrics",
-    "analyze_ordinal_agreement",
-    "mad",
 ]

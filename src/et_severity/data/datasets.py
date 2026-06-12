@@ -498,11 +498,3 @@ def build_LOSO_loaders(
             persistent_workers=persistent_workers,
         )
     return loaders
-
-
-PathBagLoaderBase = _BaseMILLoaderPath
-BalancedBagDataset = BalancedMILDatasetPath_RPT
-EvaluationBagDataset = EvalMILDatasetPath
-pad_bag_batch = collate_mil_pad
-build_patient_holdout_loaders = build_dataloader
-build_loso_loaders = build_LOSO_loaders
