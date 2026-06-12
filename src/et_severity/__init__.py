@@ -8,6 +8,7 @@ from .models import (
     EncoderConfig,
     JointInstanceAttentionConfig,
     MultimodalModelConfig,
+    ResidualMultimodalModelConfig,
     SingleModelConfig,
 )
 from .training import (
@@ -68,6 +69,7 @@ __all__ = [
     "SingleModelConfig",
     "MultimodalModelConfig",
     "JointInstanceAttentionConfig",
+    "ResidualMultimodalModelConfig",
     "TrainingConfig",
     "TrainingRun",
     "fit_single_modality",

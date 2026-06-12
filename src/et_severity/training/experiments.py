@@ -19,6 +19,10 @@ from ..models.mil_models import (
     build_multimodal_model,
     build_single_modality_model,
 )
+from ..models.residual_multimodal_mil import (
+    ResidualMultimodalModelConfig,
+    build_residual_multimodal_model,
+)
 from ..utils import set_seed
 from .engine import (
     TrainingConfig,
@@ -30,7 +34,11 @@ from .engine import (
 
 MetricFn = Callable[[Dict[str, object]], object]
 DeviceLike = Union[str, torch.device]
-MultimodalConfig = Union[MultimodalModelConfig, JointInstanceAttentionConfig]
+MultimodalConfig = Union[
+    MultimodalModelConfig,
+    JointInstanceAttentionConfig,
+    ResidualMultimodalModelConfig,
+]
 
 
 @dataclass
@@ -112,12 +120,14 @@ def fit_multimodal(
     set_seed(seed)
     if isinstance(model_config, JointInstanceAttentionConfig):
         model = build_joint_instance_attention_model(model_config)
+    elif isinstance(model_config, ResidualMultimodalModelConfig):
+        model = build_residual_multimodal_model(model_config)
     elif isinstance(model_config, MultimodalModelConfig):
         model = build_multimodal_model(model_config)
     else:
         raise TypeError(
-            "model_config must be MultimodalModelConfig or "
-            "JointInstanceAttentionConfig"
+            "model_config must be MultimodalModelConfig, "
+            "JointInstanceAttentionConfig, or ResidualMultimodalModelConfig"
         )
     model = model.to(resolved_device)
     history = train_multimodal_model(

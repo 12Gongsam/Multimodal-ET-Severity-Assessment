@@ -27,6 +27,8 @@ class TrainingConfig:
     scheduler_cooldown: int = 1
     scheduler_min_lr: float = 1e-6
     scheduler_threshold: float = 1e-3
+    scheduler_threshold_mode: str = "rel"
+    scheduler_eps: float = 1e-8
 
 
 def _metrics_from_confusion(confusion: torch.Tensor) -> Dict[str, object]:
@@ -313,6 +315,8 @@ def _fit(
             cooldown=config.scheduler_cooldown,
             min_lr=config.scheduler_min_lr,
             threshold=config.scheduler_threshold,
+            threshold_mode=config.scheduler_threshold_mode,
+            eps=config.scheduler_eps,
         )
 
     best_score = math.inf if config.monitor == "loss" else -math.inf

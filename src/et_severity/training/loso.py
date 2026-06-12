@@ -13,6 +13,7 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 from ..models.joint_instance_attention_mil import JointInstanceAttentionConfig
 from ..models.mil_models import MultimodalModelConfig, SingleModelConfig
+from ..models.residual_multimodal_mil import ResidualMultimodalModelConfig
 from .engine import TrainingConfig
 from .experiments import fit_multimodal, fit_single_modality
 
@@ -54,11 +55,15 @@ def run_loso_cv(
         raise ValueError("multimodal training currently supports severity only")
     if modality == "multimodal" and not isinstance(
         model_config,
-        (MultimodalModelConfig, JointInstanceAttentionConfig),
+        (
+            MultimodalModelConfig,
+            JointInstanceAttentionConfig,
+            ResidualMultimodalModelConfig,
+        ),
     ):
         raise TypeError(
-            "multimodal training requires MultimodalModelConfig or "
-            "JointInstanceAttentionConfig"
+            "multimodal training requires MultimodalModelConfig, "
+            "JointInstanceAttentionConfig, or ResidualMultimodalModelConfig"
         )
     if modality != "multimodal" and not isinstance(
         model_config, SingleModelConfig
@@ -113,11 +118,12 @@ def run_loso_cv(
 
         if output_dir is not None:
             if modality == "multimodal":
-                architecture = (
-                    "JointInstanceAttention_"
-                    if isinstance(model_config, JointInstanceAttentionConfig)
-                    else ""
-                )
+                if isinstance(model_config, JointInstanceAttentionConfig):
+                    architecture = "JointInstanceAttention_"
+                elif isinstance(model_config, ResidualMultimodalModelConfig):
+                    architecture = "ResidualCrossAttention_"
+                else:
+                    architecture = ""
                 checkpoint_name = (
                     f"{architecture}ACC_{model_config.acc_encoder.name}_"
                     f"Traj_{model_config.traj_encoder.name}_"

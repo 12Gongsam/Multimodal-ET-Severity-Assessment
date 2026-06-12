@@ -8,6 +8,11 @@ from .mil_models import (
     MultimodalModelConfig,
     SingleModelConfig,
 )
+from .residual_multimodal_mil import (
+    MILResidualMultiModal,
+    ResidualMultimodalModelConfig,
+    build_residual_multimodal_model,
+)
 
 __all__ = [
     "EncoderConfig",
@@ -16,4 +21,7 @@ __all__ = [
     "JointInstanceAttentionConfig",
     "MILJointInstanceAttention",
     "build_joint_instance_attention_model",
+    "ResidualMultimodalModelConfig",
+    "MILResidualMultiModal",
+    "build_residual_multimodal_model",
 ]
