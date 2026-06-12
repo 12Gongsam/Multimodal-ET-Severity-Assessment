@@ -33,8 +33,12 @@ class BagRotator:
     - prob: 회전 적용 확률 (기본 0.5)
     """
     def __init__(self, seed=123, prob: float = 0.5):
-        self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)
+        self.rng = np.random.default_rng(self.seed)
         self.prob = float(prob)
+
+    def reset_random_state(self):
+        self.rng = np.random.default_rng(self.seed)
 
     def __call__(
         self,
@@ -104,7 +108,8 @@ class InstancePermTimeW:
                  tw_a=(0.15,0.35), tw_f=(0.5,1.5),
                  apply_perm=True, apply_timew=True,
                  prob_perm: float = 0.5, prob_timew: float = 0.5):
-        self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)
+        self.rng = np.random.default_rng(self.seed)
         self.n_min = n_min
         self.n_max = n_max
         self.tw_a = tw_a
@@ -113,6 +118,9 @@ class InstancePermTimeW:
         self.apply_timew = apply_timew
         self.prob_perm = float(prob_perm)
         self.prob_timew = float(prob_timew)
+
+    def reset_random_state(self):
+        self.rng = np.random.default_rng(self.seed)
 
     def __call__(
         self,

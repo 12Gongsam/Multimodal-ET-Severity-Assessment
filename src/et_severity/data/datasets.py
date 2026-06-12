@@ -215,6 +215,12 @@ class BalancedMILDatasetPath_RPT(Dataset):
     def __len__(self):
         return len(self.items)
 
+    def reset_random_state(self):
+        if hasattr(self.bag_rot, "reset_random_state"):
+            self.bag_rot.reset_random_state()
+        if hasattr(self.inst_ptw, "reset_random_state"):
+            self.inst_ptw.reset_random_state()
+
     def __getitem__(self, idx):
         bag_idx, is_augmented = self.items[idx]
         sample = self.base.load_bag(bag_idx)

@@ -56,6 +56,12 @@ def _resolve_device(device: Optional[DeviceLike]) -> torch.device:
     return torch.device(device)
 
 
+def _reset_loader_random_state(loader) -> None:
+    dataset = getattr(loader, "dataset", None)
+    if hasattr(dataset, "reset_random_state"):
+        dataset.reset_random_state()
+
+
 def fit_single_modality(
     train_loader,
     valid_loader,
@@ -72,6 +78,8 @@ def fit_single_modality(
     """Build, train, and evaluate one single-modality model."""
     resolved_device = _resolve_device(device)
     set_seed(seed)
+    _reset_loader_random_state(train_loader)
+    _reset_loader_random_state(valid_loader)
     model = build_single_modality_model(
         model_config,
         modality=modality,
@@ -118,6 +126,8 @@ def fit_multimodal(
     """Build, train, and evaluate one multimodal severity model."""
     resolved_device = _resolve_device(device)
     set_seed(seed)
+    _reset_loader_random_state(train_loader)
+    _reset_loader_random_state(valid_loader)
     if isinstance(model_config, JointInstanceAttentionConfig):
         model = build_joint_instance_attention_model(model_config)
     elif isinstance(model_config, ResidualMultimodalModelConfig):
